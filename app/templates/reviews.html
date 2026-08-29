@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <div>
+    <h2 style="font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em;">Reviews & Quantitative Analytics</h2>
+    <p style="font-size: 0.8125rem; color: var(--muted-foreground); margin-top: 2px;">
+      Hypothesis validation, win rates, and trading journal post-mortems grouped by confidence level.
+    </p>
+  </div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px;">
+  <!-- Confidence Hypothesis Table -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="pie-chart" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.9rem;">Confidence
+          Hypothesis Performance</span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="padding: 0;">
+      <div class="table-wrap" style="border: none;">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>Confidence</th>
+              <th>Total Plans</th>
+              <th>Avg RRR</th>
+              <th>Win Rate</th>
+              <th>Realized PnL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in analytics %}
+            <tr>
+              <td><strong style="color: var(--foreground);">{{ a.confidence }}</strong></td>
+              <td>{{ a.total_plans }}</td>
+              <td>{{ a.avg_rrr }}</td>
+              <td>{{ a.win_rate }}%</td>
+              <td class="{{ 'pnl-positive' if a.realized_pnl >= 0 else 'pnl-negative' }}">
+                ${{ "%.2f"|format(a.realized_pnl) }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Realized PnL & Position History -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="check-circle-2" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.9rem;">Closed
+          Positions & Realized PnL Summary</span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="padding: 0;">
+      <div class="table-wrap" style="border: none;">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Position Side</th>
+              <th>Realized PnL</th>
+              <th>Cumulative Fees Paid</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for symbol, pos in all_positions.items() %}
+            <tr>
+              <td><strong style="color: var(--foreground);">{{ symbol }}</strong></td>
+              <td><span class="ui-badge badge-{{ pos.position_side }}">{{ pos.position_side }}</span></td>
+              <td class="{{ 'pnl-positive' if pos.realized_pnl >= 0 else 'pnl-negative' }}">
+                ${{ "%.2f"|format(pos.realized_pnl) }}
+              </td>
+              <td>${{ "%.2f"|format(pos.total_fees) }}</td>
+              <td>
+                {% if pos.qty > 0 %}
+                <span class="ui-badge badge-active">Open ({{ "%.2f"|format(pos.qty) }})</span>
+                {% else %}
+                <span class="ui-badge badge-neutral">Closed</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--muted-foreground); padding: 24px 0;">No trading
+                history available for review.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

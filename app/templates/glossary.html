@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <div>
+    <h2 style="font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em;">Financial & Trading Glossary</h2>
+    <p style="font-size: 0.8125rem; color: var(--muted-foreground); margin-top: 2px;">
+      Essential quantitative metrics, portfolio management concepts, and financial engineering definitions used across
+      Mini Trading Diary.
+    </p>
+  </div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 16px;">
+  <!-- Item 1: TWR -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="ui-badge badge-active">Performance</span>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.95rem;">
+          TWR (Time-Weighted Rate of Return / 시간가중수익률)
+        </span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="font-size: 0.85rem; color: var(--muted-foreground); line-height: 1.6;">
+      <p style="margin-bottom: 8px;">
+        트레이더의 외부 입출금(Cash Inflow/Outflow)으로 인한 포트폴리오 왜곡을 제거하고, <strong>순수한 운용 트레이딩 실력</strong>만을 복리로 측정하는 글로벌 기관 투자 표준
+        수익률 산정 방식입니다.
+      </p>
+      <div
+        style="background-color: var(--muted); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 0.9rem; color: var(--foreground);">
+        $$R_t = \frac{\text{NAV}_t - \text{Flow}_t}{\text{NAV}_{t-1}} - 1$$
+        $$\text{Index}_t = \text{Index}_{t-1} \times (1 + R_t)$$
+      </div>
+    </div>
+  </div>
+
+  <!-- Item 2: NAV -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="ui-badge badge-active">Balance</span>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.95rem;">
+          NAV (Net Asset Value / 순자산가치)
+        </span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="font-size: 0.85rem; color: var(--muted-foreground); line-height: 1.6;">
+      <p style="margin-bottom: 8px;">
+        현재 시점의 보유 현금 잔고(Cash Balance)와 보유 주식/파생상품의 실시간 시장 평가액(Market Value)의 합계입니다.
+      </p>
+      <div
+        style="background-color: var(--muted); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 0.9rem; color: var(--foreground);">
+        $$\text{Total NAV} = \text{Cash Balance} + \sum (\text{Price}_i \times \text{Qty}_i)$$
+      </div>
+    </div>
+  </div>
+
+  <!-- Item 3: RRR -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="ui-badge badge-active">Risk Management</span>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.95rem;">
+          RRR (Risk-to-Reward Ratio / 손익비)
+        </span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="font-size: 0.85rem; color: var(--muted-foreground); line-height: 1.6;">
+      <p style="margin-bottom: 8px;">
+        사전 계획 수립 시 진입가 대비 감수할 최대 손실폭(Stop Loss) 대비 기대할 수 있는 목표 수익폭(Take Profit)의 비율입니다. 일반적으로 손익비가 <strong>1:2
+          이상</strong>인 매매 기회만을 선별하는 것이 장기 생존의 핵심 원칙입니다.
+      </p>
+      <div
+        style="background-color: var(--muted); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 0.9rem; color: var(--foreground);">
+        $$\text{RRR} = \frac{|\text{Target Price} - \text{Entry Price}|}{|\text{Entry Price} - \text{Stop Loss
+        Price}|}$$
+      </div>
+    </div>
+  </div>
+
+  <!-- Item 4: Average Cost Method -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="ui-badge badge-active">Accounting</span>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.95rem;">
+          Average Cost Method (이동평균법)
+        </span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="font-size: 0.85rem; color: var(--muted-foreground); line-height: 1.6;">
+      <p style="margin-bottom: 8px;">
+        분할 매수(Scale-in) 시 수량 가중치로 평단가를 갱신하고, 분할 매도(Scale-out) 시 당시의 평균단가를 기준으로 실현 손익을 확정하는 원가 회계 방식입니다.
+      </p>
+      <div
+        style="background-color: var(--muted); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 0.9rem; color: var(--foreground);">
+        $$\text{Realized PnL}_{\text{Long}} = (\text{Price}_{\text{sell}} - \text{Price}_{\text{avg}}) \times \text{Qty}
+        - \text{Fee}$$
+      </div>
+    </div>
+  </div>
+
+  <!-- Item 5: Confidence Level -->
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="ui-badge badge-active">Behavioral Finance</span>
+        <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.95rem;">
+          Confidence Level (가설 확신도)
+        </span>
+      </div>
+    </div>
+    <div class="ui-card-content" style="font-size: 0.85rem; color: var(--muted-foreground); line-height: 1.6;">
+      <p>
+        매매 계획 수립 시 기술적/기본적 분석 근거에 대한 주관적 신뢰 수준 (<code>High</code>, <code>Medium</code>, <code>Low</code>)을 사전에 기록하여,
+        사후적으로 <strong>"내 확신이 높을 때 실제로 승률과 수익금도 높았는가?"</strong>를 계량 검증하는 도구입니다.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- KaTeX CSS & JS CDN (Lightweight LaTeX Rendering) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false}
+    ]
+  });"></script>
+{% endblock %}

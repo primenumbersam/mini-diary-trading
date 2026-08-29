@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Swing Trading Diary{% endblock %}</title>
+
+  <!-- Prevent FOUC: Early Theme Init -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
+
+  <!-- Tailwind CSS Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: 'var(--border)',
+            surface: 'var(--secondary)',
+            cardbg: 'var(--card)',
+            background: 'var(--background)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- DataGrid Controller Script (Loads first) -->
+  <script src="/static/table_controls.js"></script>
+  <!-- HTMX & Alpine.js (Loaded in exact order) -->
+  <script src="https://unpkg.com/htmx.org@1.9.11"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="antialiased min-h-screen" x-data>
+  <div class="app-layout" :class="{ 'sidebar-collapsed': !$store.app?.sidebarOpen }">
+    
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div class="sidebar-overlay md:hidden"
+         x-show="$store.app?.sidebarOpen"
+         x-transition:enter="transition-opacity ease-linear duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-linear duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         @click="$store.app.sidebarOpen = false"
+         style="display: none;"></div>
+
+    <!-- Left Sidebar -->
+    {% include "sidebar.html" %}
+
+    <!-- Main Content Wrapper -->
+    <div class="app-main flex-1 flex flex-col min-w-0">
+      {% include "header.html" %}
+
+      <div class="page-container p-4 md:p-6 flex flex-col gap-6">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+
+  {% block scripts %}{% endblock %}
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    });
+    document.body.addEventListener('htmx:afterSwap', () => {
+      if (window.lucide) {
+        lucide.createIcons();
+      }
+    });
+  </script>
+</body>
+
+</html>

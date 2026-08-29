@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Top Metrics Grid (Responsive 4 Columns) -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <span class="ui-card-title">Total NAV (USD)</span>
+      <i data-lucide="wallet" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+    </div>
+    <div class="ui-card-content">
+      <div class="metric-value">${{ "{:,.0f}".format(total_nav) }}</div>
+      <div class="metric-subtext">
+        <span>≈ ₩{{ "{:,.0f}".format(total_nav_krw) }}</span>
+        <span style="opacity: 0.6;">(1 USD = ₩{{ "{:,.1f}".format(fx_rate) }})</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <span class="ui-card-title">Cash Balance</span>
+      <i data-lucide="dollar-sign" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+    </div>
+    <div class="ui-card-content">
+      <div class="metric-value">${{ "{:,.0f}".format(cash_balance) }}</div>
+      <div class="metric-subtext">
+        <span>{{ "%.1f"|format(cash_ratio) }}% of total portfolio</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <span class="ui-card-title">Unrealized PnL</span>
+      <i data-lucide="trending-up" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+    </div>
+    <div class="ui-card-content">
+      <div class="metric-value {{ 'pnl-positive' if total_unrealized_pnl >= 0 else 'pnl-negative' }}">
+        {{ "+$" if total_unrealized_pnl >= 0 else "-$" }}{{ "{:,.0f}".format(total_unrealized_pnl|abs) }}
+      </div>
+      <div class="metric-subtext">
+        <span>Positions Value: ${{ "{:,.2f}".format(total_market_value) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui-card">
+    <div class="ui-card-header">
+      <span class="ui-card-title">Cumulative TWR</span>
+      <i data-lucide="activity" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+    </div>
+    <div class="ui-card-content">
+      <div class="metric-value {{ 'pnl-positive' if cumulative_twr >= 0 else 'pnl-negative' }}">
+        {{ "+%.2f"|format(cumulative_twr) if cumulative_twr >= 0 else "%.2f"|format(cumulative_twr) }}%
+      </div>
+      <div class="metric-subtext">
+        <span>Index Level: {{ "%.2f"|format(twr_index) }} (Base = 100)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Benchmark Chart Card -->
+<div class="ui-card" x-data="{ benchmark: 'SPY' }">
+  <div class="ui-card-header">
+    <div>
+      <span class="ui-card-title" style="font-size: 0.95rem; font-weight: 600; color: var(--foreground);">Performance vs
+        Benchmark</span>
+      <div style="font-size: 0.75rem; color: var(--muted-foreground); margin-top: 2px;">
+        Time-Weighted Return (TWR) normalized to 100 on initial deposit
+      </div>
+    </div>
+    <div style="display: flex; gap: 6px;">
+      <button class="ui-btn ui-btn-sm" :class="{ 'ui-btn-active': benchmark === 'SPY' }"
+        @click="benchmark = 'SPY'; loadBenchmark('SPY')">SPY</button>
+      <button class="ui-btn ui-btn-sm" :class="{ 'ui-btn-active': benchmark === 'DIA' }"
+        @click="benchmark = 'DIA'; loadBenchmark('DIA')">DIA</button>
+      <button class="ui-btn ui-btn-sm" :class="{ 'ui-btn-active': benchmark === 'QQQ' }"
+        @click="benchmark = 'QQQ'; loadBenchmark('QQQ')">QQQ</button>
+    </div>
+  </div>
+  <div class="ui-card-content" style="padding-top: 10px;">
+    <div style="height: 300px; width: 100%;">
+      <canvas id="twrChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Active Positions Table Card -->
+<div class="ui-card">
+  <div class="ui-card-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i data-lucide="layers" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+      <span class="ui-card-title" style="color: var(--foreground); font-weight: 600; font-size: 0.9rem;">Active
+        Positions</span>
+    </div>
+    <button class="ui-btn ui-btn-sm" onclick="window.location.reload()">
+      <i data-lucide="refresh-cw" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+      Refresh
+    </button>
+  </div>
+  <div class="ui-card-content" id="positions-container" style="padding: 0;">
+    <div class="table-wrap" style="border: none;">
+      <table class="ui-table">
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Side</th>
+            <th>Quantity</th>
+            <th>Avg Entry</th>
+            <th>Current</th>
+            <th>Market Value</th>
+            <th>Unrealized PnL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pos in positions %}
+          <tr>
+            <td><strong style="color: var(--foreground);">{{ pos.asset_id }}</strong></td>
+            <td>
+              <span class="ui-badge badge-{{ pos.position_side }}">{{ pos.position_side }}</span>
+            </td>
+            <td>{{ "%.2f"|format(pos.qty) }}</td>
+            <td>${{ "%.2f"|format(pos.avg_price) }}</td>
+            <td>${{ "%.2f"|format(pos.current_price) }}</td>
+            <td>${{ "%.2f"|format(pos.market_value) }}</td>
+            <td class="{{ 'pnl-positive' if pos.unrealized_pnl >= 0 else 'pnl-negative' }}">
+              {{ "+$" if pos.unrealized_pnl >= 0 else "-$" }}{{ "%.2f"|format(pos.unrealized_pnl|abs) }}
+              <span style="font-size: 0.75rem; color: var(--muted-foreground); margin-left: 4px;">
+                ({{ "+%.2f"|format(pos.unrealized_pnl_pct) if pos.unrealized_pnl_pct >= 0 else "%.2f"|format(pos.unrealized_pnl_pct) }}%)
+              </span>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--muted-foreground); padding: 24px 0;">No open positions.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let chartInstance = null;
+
+  async function loadBenchmark(ticker = 'SPY') {
+    try {
+      const res = await fetch(`/api/benchmark/chart?ticker=${ticker}`);
+      const data = await res.json();
+
+      const ctx = document.getElementById('twrChart').getContext('2d');
+
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.labels,
+          datasets: [
+            {
+              label: 'Portfolio (TWR Index)',
+              data: data.portfolio_data,
+              borderColor: '#f4f4f5',
+              backgroundColor: 'rgba(244, 244, 245, 0.05)',
+              borderWidth: 2,
+              tension: 0.2,
+              pointRadius: 3,
+              pointBackgroundColor: '#f4f4f5'
+            },
+            {
+              label: `Benchmark (${ticker})`,
+              data: data.benchmark_data,
+              borderColor: '#71717a',
+              borderDash: [5, 5],
+              borderWidth: 1.5,
+              tension: 0.2,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: {
+              grid: { color: '#27272a', drawBorder: false },
+              ticks: { color: '#a1a1aa', font: { family: 'ui-monospace', size: 11 }, maxTicksLimit: 8 }
+            },
+            y: {
+              grid: { color: '#27272a', drawBorder: false },
+              ticks: { color: '#a1a1aa', font: { family: 'ui-monospace', size: 11 } }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              align: 'end',
+              labels: {
+                color: '#a1a1aa',
+                boxWidth: 12,
+                usePointStyle: true,
+                font: { family: '-apple-system, BlinkMacSystemFont, Segoe UI', size: 12 }
+              }
+            },
+            tooltip: {
+              backgroundColor: '#18181b',
+              titleColor: '#f4f4f5',
+              bodyColor: '#a1a1aa',
+              borderColor: '#27272a',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 6
+            }
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Failed to load benchmark data', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadBenchmark('SPY');
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <div>
+    <h2 style="font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em;">Trades & Cash Ledger</h2>
+    <p style="font-size: 0.8125rem; color: var(--muted-foreground); margin-top: 2px;">
+      Immutable raw transaction log for order fills and cash flow. Trade IDs are auto-generated with unique sequence.
+    </p>
+  </div>
+</div>
+
+<script id="trades-data" type="application/json">
+  {{ trades | tojson | safe }}
+</script>
+<script id="plans-lookup-data" type="application/json">
+  {{ plans | tojson | safe }}
+</script>
+<script id="assets-lookup-data" type="application/json">
+  {{ assets | tojson | safe }}
+</script>
+
+<div class="flex flex-col gap-6" x-data="tradesGrid(
+  JSON.parse(document.getElementById('trades-data')?.textContent || '[]'),
+  JSON.parse(document.getElementById('assets-lookup-data')?.textContent || '[]'),
+  JSON.parse(document.getElementById('plans-lookup-data')?.textContent || '[]')
+)" x-init="init()">
+  <!-- Top: Record Trade / Cash Flow Form Card -->
+  <div class="ui-card w-full">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="plus-circle" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+        <span class="ui-card-title">Record Execution</span>
+      </div>
+    </div>
+    <div class="ui-card-content">
+      <form action="/api/trades" method="POST" class="flex flex-col gap-3">
+        <!-- Datalist for registered assets -->
+        <datalist id="registered-assets">
+          <template x-for="a in allAssets" :key="a.asset_id">
+            <option :value="a.asset_id" x-text="a.asset_id + ' (' + a.asset_name + ')'"></option>
+          </template>
+        </datalist>
+
+        <!-- 1행: Date, Action, Asset, Linked Plan, Instrument, Side (6열) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Date & Time</label>
+            <input type="datetime-local" name="trade_datetime" class="ui-input" x-model="newDatetime">
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Action</label>
+            <select name="trade_action" class="ui-select" x-model="newAction" @change="onActionChange()">
+              <option value="open">Open Position</option>
+              <option value="add">Add Size</option>
+              <option value="reduce">Reduce Size</option>
+              <option value="close">Close Position</option>
+              <option value="deposit">Deposit Cash</option>
+              <option value="withdraw">Withdraw Cash</option>
+            </select>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Asset Symbol</label>
+            <input type="text" name="asset_id" list="registered-assets" class="ui-input" x-model="newAsset"
+              @input="onAssetInput($event.target.value)"
+              @change="onAssetInput($event.target.value)"
+              placeholder="e.g. NVDA" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label flex items-center justify-between">
+              <span>Linked Plan</span>
+              <span class="text-[0.65rem] text-[var(--muted-foreground)]" x-show="availablePlansForAsset.length > 0" x-text="availablePlansForAsset.length + ' plan(s)'"></span>
+            </label>
+            <template x-if="availablePlansForAsset.length > 0">
+              <select name="plan_id" class="ui-select" x-model="newPlanId" @change="onPlanSelectChange($event.target.value)">
+                <option value="">-- None --</option>
+                <template x-for="p in availablePlansForAsset" :key="p.plan_id">
+                  <option :value="p.plan_id" x-text="p.plan_id + ' (' + p.position_side + ' @$' + p.plan_entry_price + ')'"></option>
+                </template>
+              </select>
+            </template>
+            <template x-if="availablePlansForAsset.length === 0">
+              <input type="text" name="plan_id" class="ui-input" x-model="newPlanId" placeholder="Optional Plan ID">
+            </template>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Instrument</label>
+            <select name="instrument_type" class="ui-select">
+              <option value="spot">Spot</option>
+              <option value="future">Future</option>
+              <option value="option">Option</option>
+            </select>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Side</label>
+            <select name="position_side" class="ui-select" x-model="newSide">
+              <option value="neutral">Neutral (Cash)</option>
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 2행: Price, TP, SL, Qty, Trade Value Live (5열) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Price ($)</label>
+            <input type="number" step="any" name="trade_price" class="ui-input" x-model="newPrice"
+              :value="newAction === 'deposit' || newAction === 'withdraw' ? '1.0' : newPrice" placeholder="0.00" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Target Price ($)</label>
+            <input type="number" step="any" name="trade_tp_price" class="ui-input" x-model="newTp" placeholder="0.00"
+              :disabled="newAction === 'deposit' || newAction === 'withdraw'">
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Stop Loss ($)</label>
+            <input type="number" step="any" name="trade_sl_price" class="ui-input" x-model="newSl" placeholder="0.00"
+              :disabled="newAction === 'deposit' || newAction === 'withdraw'">
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Qty / Amount</label>
+            <input type="number" step="any" name="trade_qty" class="ui-input" x-model="newQty" placeholder="0.00" required>
+          </div>
+          <div class="ui-form-group !mb-0 col-span-2 sm:col-span-1">
+            <label class="ui-label">Trade Value (Live)</label>
+            <div class="h-9 px-3 bg-[#262626] border border-[#38383a] rounded-md flex items-center justify-between">
+              <span class="text-xs text-[#a1a1aa]">$</span>
+              <strong class="font-mono text-sm text-[#f4f4f5]" x-text="calcTradeValue()">0.00</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3행: Fee, Memo, Button (3열 비대칭) -->
+        <div class="flex flex-col sm:flex-row items-end gap-3">
+          <div class="ui-form-group !mb-0 sm:w-36 w-full">
+            <label class="ui-label">Fee ($)</label>
+            <input type="number" step="any" name="trade_fee" class="ui-input" x-model="newFee" placeholder="0.00">
+          </div>
+          <div class="ui-form-group !mb-0 flex-1 w-full">
+            <label class="ui-label">Execution Memo</label>
+            <input type="text" name="trade_memo" class="ui-input" x-model="newMemo" placeholder="Execution notes...">
+          </div>
+          <button type="submit" class="ui-btn ui-btn-primary whitespace-nowrap h-9 px-6 sm:w-auto w-full">
+            <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i> Record Trade
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bottom: Trade Ledger Table with Full Controls -->
+  <div class="ui-card">
+    <!-- Top Filter Bar: [Group, Instrument, Side, Status, Search, Columns] -->
+    <div class="p-3 bg-[#262626] border-b border-[#38383a] flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- 1. Group Filter (First) -->
+        <select x-model="groupBy" class="ui-select !h-8 !text-xs !w-32 font-medium">
+          <option value="none">Group: None</option>
+          <option value="trade_action">Group: Action</option>
+          <option value="instrument_type">Group: Instrument</option>
+          <option value="position_side">Group: Side</option>
+          <option value="trade_status">Group: Status</option>
+          <option value="asset_id">Group: Asset</option>
+        </select>
+
+        <!-- 2. Action Filter -->
+        <select x-model="filterAction" class="ui-select !h-8 !text-xs !w-28">
+          <option value="all">Action: All</option>
+          <option value="open">Open</option>
+          <option value="add">Add</option>
+          <option value="reduce">Reduce</option>
+          <option value="close">Close</option>
+          <option value="deposit">Deposit</option>
+          <option value="withdraw">Withdraw</option>
+        </select>
+
+        <!-- 3. Side Filter -->
+        <select x-model="filterSide" class="ui-select !h-8 !text-xs !w-24">
+          <option value="all">Side: All</option>
+          <option value="long">Long</option>
+          <option value="short">Short</option>
+          <option value="neutral">Neutral</option>
+        </select>
+
+        <!-- 4. Status Filter -->
+        <select x-model="filterStatus" class="ui-select !h-8 !text-xs !w-28">
+          <option value="all">Status: All</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <!-- Columns Customizer Dropdown -->
+      <div class="relative">
+        <button class="ui-btn ui-btn-sm" @click="showColMenu = !showColMenu">
+          <i data-lucide="sliders-horizontal" class="w-3 h-3 mr-1"></i> Columns
+        </button>
+        <div x-show="showColMenu" @click.away="showColMenu = false" class="action-menu !w-40 p-2 shadow-2xl">
+          <div class="text-[0.65rem] font-semibold text-[#a1a1aa] uppercase mb-1.5 px-1">Toggle Columns</div>
+          <div class="flex flex-col gap-1">
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.date"> Date
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.asset"> Asset
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.action"> Action
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.instrument"> Instrument
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.side"> Side
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.price"> Price
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.tp"> TP / SL
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.qty"> Quantity
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.value"> Trade Value
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.fee"> Fee
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.status"> Status
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table: [Date, Asset, Action, Instrument, Side, Price, TP / SL, Qty, Value, Fee, Status, Action] -->
+    <div class="ui-card-content" style="padding: 0;">
+      <div class="table-wrap flex-1 flex flex-col min-h-0" style="border: none;">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th x-show="cols.date" class="sortable" @click="sortBy('trade_datetime')">
+                <div class="flex items-center gap-1">Date & Time <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.asset" class="sortable" @click="sortBy('asset_id')">
+                <div class="flex items-center gap-1">Asset <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.action" class="sortable" @click="sortBy('trade_action')">
+                <div class="flex items-center gap-1">Action <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.instrument" class="sortable" @click="sortBy('instrument_type')">
+                <div class="flex items-center gap-1">Instrument <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.side" class="sortable" @click="sortBy('position_side')">
+                <div class="flex items-center gap-1">Side <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.price" class="sortable" @click="sortBy('trade_price')">
+                <div class="flex items-center gap-1">Price <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.tp" class="sortable" @click="sortBy('trade_tp_price')">
+                <div class="flex items-center gap-1">TP / SL <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.qty" class="sortable" @click="sortBy('trade_qty')">
+                <div class="flex items-center gap-1">Quantity <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.value" class="sortable" @click="sortBy('trade_amount')">
+                <div class="flex items-center gap-1">Value <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.fee" class="sortable" @click="sortBy('trade_fee')">
+                <div class="flex items-center gap-1">Fee <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.status" class="sortable" @click="sortBy('trade_status')">
+                <div class="flex items-center gap-1">Status <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.actions" style="text-align: right; width: 60px;">Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in displayRows" :key="row._rowKey">
+              <tr :class="row._rowType === 'group' ? 'group-header-row' : ''"
+                :id="row._rowType === 'data' ? 'trade-row-' + row.data.trade_id : null">
+                <!-- Group Divider: single colspan cell -->
+                <td x-show="row._rowType === 'group'" colspan="12"
+                  class="!bg-[#1e1e22] !text-[#a1a1aa] font-semibold text-xs py-1.5 px-3 uppercase tracking-wider">
+                  <span x-text="row.label"></span>
+                </td>
+
+                <!-- Data Row Cells -->
+                <td x-show="row._rowType === 'data' && cols.date" class="text-xs text-[#a1a1aa]"
+                  x-text="row.data?.trade_datetime"></td>
+                <td x-show="row._rowType === 'data' && cols.asset"><strong class="text-[#3b82f6]"
+                    x-text="row.data?.asset_id"></strong></td>
+                <td x-show="row._rowType === 'data' && cols.action">
+                  <span class="ui-badge" :class="'badge-' + (row.data?.trade_action || '')"
+                    x-text="row.data?.trade_action"></span>
+                </td>
+                <td x-show="row._rowType === 'data' && cols.instrument"><span class="ui-badge badge-neutral"
+                    x-text="row.data?.instrument_type || 'spot'"></span></td>
+                <td x-show="row._rowType === 'data' && cols.side">
+                  <span class="ui-badge" :class="'badge-' + (row.data?.position_side || '')"
+                    x-text="row.data?.position_side"></span>
+                </td>
+                <td x-show="row._rowType === 'data' && cols.price"
+                  x-text="row.data ? '$' + Number(row.data.trade_price).toFixed(2) : ''"></td>
+                <td x-show="row._rowType === 'data' && cols.tp"
+                  x-text="(row.data && (row.data.trade_tp_price || row.data.trade_sl_price)) ? ('$' + Number(row.data.trade_tp_price || 0).toFixed(2) + ' / $' + Number(row.data.trade_sl_price || 0).toFixed(2)) : '-'">
+                </td>
+                <td x-show="row._rowType === 'data' && cols.qty" x-text="row.data?.trade_qty"></td>
+                <td x-show="row._rowType === 'data' && cols.value"
+                  x-text="row.data ? '$' + Number(row.data.trade_amount || (row.data.trade_price * row.data.trade_qty)).toFixed(2) : ''">
+                </td>
+                <td x-show="row._rowType === 'data' && cols.fee"
+                  x-text="row.data ? '$' + Number(row.data.trade_fee).toFixed(2) : '$0.00'"></td>
+                <td x-show="row._rowType === 'data' && cols.status"><span class="ui-badge"
+                    :class="'badge-' + (row.data?.trade_status || '')" x-text="row.data?.trade_status"></span></td>
+                <td x-show="row._rowType === 'data' && cols.actions" style="text-align: right;">
+                  <div class="action-dropdown" @click.away="if (openMenuId === row.data?.trade_id) openMenuId = null">
+                    <button class="ui-btn ui-btn-sm !px-1.5"
+                      @click="openMenuId = (openMenuId === row.data?.trade_id ? null : row.data?.trade_id)">
+                      <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <div x-show="openMenuId === row.data?.trade_id" class="action-menu shadow-2xl">
+                      <button class="action-item" @click="openEdit(row.data)">
+                        <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+                      </button>
+                      <button class="action-item"
+                        @click="duplicateTrade(row.data.asset_id, row.data.trade_action, row.data.position_side, row.data.trade_price, row.data.trade_qty, row.data.trade_fee, row.data.trade_tp_price, row.data.trade_sl_price, row.data.plan_id)">
+                        <i data-lucide="copy" class="w-3 h-3"></i> Duplicate
+                      </button>
+                      <button class="action-item danger" :hx-delete="'/api/trades/' + row.data?.trade_id"
+                        :hx-target="'#trade-row-' + row.data?.trade_id" hx-swap="outerHTML"
+                        :hx-confirm="'Delete trade log ' + row.data?.trade_id + '?'">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
+
+            <!-- Empty State -->
+            <template x-if="processedItems.length === 0">
+              <tr>
+                <td colspan="12" class="text-center text-[#a1a1aa] py-8">No trade logs match the selected filters.</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Trade Modal -->
+  <div x-show="showEditModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content" @click.away="closeEdit()">
+      <div class="p-4 bg-[#262626] border-b border-[#38383a] flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-[#f4f4f5] flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-4 h-4 text-[#3b82f6]"></i>
+          Edit Trade: <span class="font-mono text-xs text-[#a1a1aa]" x-text="editItem.trade_id"></span>
+        </h3>
+        <button class="text-[#a1a1aa] hover:text-[#f4f4f5]" @click="closeEdit()">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form action="/api/trades/update" method="POST" class="p-4 flex flex-col gap-3">
+        <input type="hidden" name="trade_id" :value="editItem.trade_id">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Trade Price ($)</label>
+            <input type="number" step="any" name="trade_price" class="ui-input" x-model.number="editItem.trade_price"
+              required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Quantity / Amount</label>
+            <input type="number" step="any" name="trade_qty" class="ui-input" x-model.number="editItem.trade_qty"
+              required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Target Price ($)</label>
+            <input type="number" step="any" name="trade_tp_price" class="ui-input" x-model.number="editItem.trade_tp_price">
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Stop Loss ($)</label>
+            <input type="number" step="any" name="trade_sl_price" class="ui-input" x-model.number="editItem.trade_sl_price">
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Fee ($)</label>
+            <input type="number" step="any" name="trade_fee" class="ui-input" x-model.number="editItem.trade_fee"
+              required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Linked Plan ID</label>
+            <input type="text" name="plan_id" class="ui-input" x-model="editItem.plan_id">
+          </div>
+          <div class="ui-form-group !mb-0" style="grid-column: span 2;">
+            <label class="ui-label">Status</label>
+            <select name="trade_status" class="ui-select" x-model="editItem.trade_status">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ui-form-group !mb-0">
+          <label class="ui-label">Execution Memo</label>
+          <input type="text" name="trade_memo" class="ui-input" x-model="editItem.trade_memo">
+        </div>
+
+        <div class="flex justify-end gap-2 mt-2">
+          <button type="button" class="ui-btn ui-btn-sm" @click="closeEdit()">Cancel</button>
+          <button type="submit" class="ui-btn ui-btn-primary ui-btn-sm">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <div>
+    <h2 style="font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em;">Pre-Trade Plans</h2>
+    <p style="font-size: 0.8125rem; color: var(--muted-foreground); margin-top: 2px;">
+      Formulate hypothesis, risk-to-reward ratio (RRR), and confidence before executing trades. Plan IDs are
+      auto-generated.
+    </p>
+  </div>
+</div>
+
+<script id="plans-data" type="application/json">
+  {{ plans | tojson | safe }}
+</script>
+
+<div class="flex flex-col gap-6" x-data="plansGrid(JSON.parse(document.getElementById('plans-data').textContent || '[]'))" x-init="init()">
+  <!-- Top: Formulate Plan Form Card -->
+  <div class="ui-card w-full" id="new-plan-card">
+    <div class="ui-card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="plus-circle" style="width: 16px; height: 16px; color: var(--muted-foreground);"></i>
+        <span class="ui-card-title">Formulate Plan</span>
+      </div>
+    </div>
+    <div class="ui-card-content">
+      <!-- Datalist for registered assets in plans -->
+      <datalist id="plan-assets-list">
+        {% for a in assets %}
+          <option value="{{ a.asset_id }}">{{ a.asset_id }} ({{ a.asset_name }})</option>
+        {% endfor %}
+      </datalist>
+
+      <form action="/api/plans" method="POST" class="flex flex-col gap-3">
+        <!-- 1행: Date, Symbol, Instrument, Side (4열) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Plan Date</label>
+            <input type="date" name="plan_date" class="ui-input" x-model="newPlanDate" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Asset Symbol</label>
+            <input type="text" name="asset_id" list="plan-assets-list" class="ui-input" x-model="newAssetId" placeholder="e.g. NVDA" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Instrument</label>
+            <select name="instrument_type" class="ui-select" x-model="newInstrumentType">
+              <option value="spot">Spot</option>
+              <option value="future">Future</option>
+              <option value="option">Option</option>
+            </select>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Side</label>
+            <select name="position_side" class="ui-select" x-model="newSide">
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 2행: Entry, TP, SL, Planned Qty, RRR Live Badge (5열) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Entry Price ($)</label>
+            <input type="number" step="any" name="plan_entry_price" class="ui-input" x-model.number="newEntry" placeholder="0.00" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Target Price ($)</label>
+            <input type="number" step="any" name="plan_tp_price" class="ui-input" x-model.number="newTp" placeholder="0.00" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Stop Loss ($)</label>
+            <input type="number" step="any" name="plan_sl_price" class="ui-input" x-model.number="newSl" placeholder="0.00" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Planned Qty</label>
+            <input type="number" step="any" name="plan_qty" class="ui-input" x-model.number="newPlanQty" placeholder="1" required>
+          </div>
+          <div class="ui-form-group !mb-0 col-span-2 sm:col-span-1">
+            <label class="ui-label">Est. RRR (Live)</label>
+            <div class="h-9 px-3 bg-[#262626] border border-[#38383a] rounded-md flex items-center justify-between">
+              <span class="text-xs text-[#a1a1aa]">1 :</span>
+              <strong class="font-mono text-sm" :style="{ color: parseFloat(calcRrr()) >= 2 ? 'var(--green-500)' : '#f4f4f5' }" x-text="calcRrr()">0.00</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3행: Confidence, Memo, Button (3열 비대칭) -->
+        <div class="flex flex-col sm:flex-row items-end gap-3">
+          <div class="ui-form-group !mb-0 sm:w-48 w-full">
+            <label class="ui-label">Confidence</label>
+            <select name="plan_confidence" class="ui-select" x-model="newPlanConfidence">
+              <option value="high">High Confidence</option>
+              <option value="medium">Medium Confidence</option>
+              <option value="low">Low Confidence</option>
+            </select>
+          </div>
+          <div class="ui-form-group !mb-0 flex-1 w-full">
+            <label class="ui-label">Hypothesis / Entry Reason</label>
+            <input type="text" name="plan_memo" class="ui-input" x-model="newPlanMemo" placeholder="e.g. Breakout above 50MA + strong volume">
+          </div>
+          <button type="submit" class="ui-btn ui-btn-primary whitespace-nowrap h-9 px-6 sm:w-auto w-full">
+            <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i> Create Plan
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bottom: Plan List Table -->
+  <div class="ui-card">
+    <!-- Top Filter Bar: [Search, Group, Instrument, Side, Status, Columns] -->
+    <div class="p-3 bg-[#262626] border-b border-[#38383a] flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- 1. Group Filter (First) -->
+        <select x-model="groupBy" class="ui-select !h-8 !text-xs !w-32 font-medium">
+          <option value="none">Group: None</option>
+          <option value="instrument_type">Group: Instrument</option>
+          <option value="position_side">Group: Side</option>
+          <option value="plan_status">Group: Status</option>
+          <option value="asset_id">Group: Asset</option>
+          <option value="plan_confidence">Group: Confidence</option>
+        </select>
+
+        <!-- 2. Instrument Filter -->
+        <select x-model="filterInstrument" class="ui-select !h-8 !text-xs !w-28">
+          <option value="all">Instrument: All</option>
+          <option value="spot">Spot</option>
+          <option value="future">Future</option>
+          <option value="option">Option</option>
+        </select>
+
+        <!-- 3. Side Filter -->
+        <select x-model="filterSide" class="ui-select !h-8 !text-xs !w-24">
+          <option value="all">Side: All</option>
+          <option value="long">Long</option>
+          <option value="short">Short</option>
+        </select>
+
+        <!-- 4. Status Filter -->
+        <select x-model="filterStatus" class="ui-select !h-8 !text-xs !w-28">
+          <option value="all">Status: All</option>
+          <option value="pending">Pending</option>
+          <option value="active">Active</option>
+        </select>
+      </div>
+
+      <!-- Columns Customizer -->
+      <div class="relative">
+        <button class="ui-btn ui-btn-sm" @click="showColMenu = !showColMenu">
+          <i data-lucide="sliders-horizontal" class="w-3 h-3 mr-1"></i> Columns
+        </button>
+        <div x-show="showColMenu" @click.away="showColMenu = false" class="action-menu !w-44 p-2 shadow-2xl">
+          <div class="text-[0.65rem] font-semibold text-[#a1a1aa] uppercase mb-1.5 px-1">Toggle Columns</div>
+          <div class="flex flex-col gap-1">
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.date"> Date
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.asset"> Asset
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.instrument"> Instrument
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.side"> Side
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.entry"> Entry Price
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.tp"> TP / SL
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.qty"> Quantity
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.value"> Target Value
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.rrr"> RRR
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.confidence"> Confidence
+            </label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-[#f4f4f5] p-1 hover:bg-[#2e2e32] rounded cursor-pointer">
+              <input type="checkbox" x-model="cols.status"> Status
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Header Sequence: [Date, Asset, Instrument, Side, Entry, TP/SL, Qty, Target Value, RRR, Confidence, Status, Edit] -->
+    <div class="ui-card-content" style="padding: 0;">
+      <div class="table-wrap flex-1 flex flex-col min-h-0" style="border: none;">
+        <table class="ui-table">
+          <thead>
+            <tr>
+              <th x-show="cols.date" class="sortable" @click="sortBy('plan_date')">
+                <div class="flex items-center gap-1">Date <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.asset" class="sortable" @click="sortBy('asset_id')">
+                <div class="flex items-center gap-1">Asset <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.instrument" class="sortable" @click="sortBy('instrument_type')">
+                <div class="flex items-center gap-1">Instrument <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.side" class="sortable" @click="sortBy('position_side')">
+                <div class="flex items-center gap-1">Side <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.entry" class="sortable" @click="sortBy('plan_entry_price')">
+                <div class="flex items-center gap-1">Entry Price <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.tp" class="sortable" @click="sortBy('plan_tp_price')">
+                <div class="flex items-center gap-1">TP / SL <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.qty" class="sortable" @click="sortBy('plan_qty')">
+                <div class="flex items-center gap-1">Quantity <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.value" class="sortable" @click="sortBy('plan_target_value')">
+                <div class="flex items-center gap-1">Target Value <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.rrr" class="sortable" @click="sortBy('plan_rrr')">
+                <div class="flex items-center gap-1">RRR <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i></div>
+              </th>
+              <th x-show="cols.confidence" class="sortable" @click="sortBy('plan_confidence')">
+                <div class="flex items-center gap-1">Confidence <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.status" class="sortable" @click="sortBy('plan_status')">
+                <div class="flex items-center gap-1">Status <i data-lucide="arrow-up-down" class="w-2.5 h-2.5"></i>
+                </div>
+              </th>
+              <th x-show="cols.actions" style="text-align: right; width: 60px;">Edit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="row in displayRows" :key="row._rowKey">
+              <tr :class="row._rowType === 'group' ? 'group-header-row' : ''"
+                :id="row._rowType === 'data' ? 'plan-row-' + row.data.plan_id : null">
+                <!-- Group Divider: single colspan cell -->
+                <td x-show="row._rowType === 'group'" colspan="12"
+                  class="!bg-[#1e1e22] !text-[#a1a1aa] font-semibold text-xs py-1.5 px-3 uppercase tracking-wider">
+                  <span x-text="row.label"></span>
+                </td>
+
+                <!-- Data Row Cells -->
+                <td x-show="row._rowType === 'data' && cols.date" class="text-xs text-[#a1a1aa]"
+                  x-text="row.data?.plan_date"></td>
+                <td x-show="row._rowType === 'data' && cols.asset"><strong class="text-[#3b82f6]"
+                    x-text="row.data?.asset_id"></strong></td>
+                <td x-show="row._rowType === 'data' && cols.instrument"><span class="ui-badge badge-neutral"
+                    x-text="row.data?.instrument_type || 'spot'"></span></td>
+                <td x-show="row._rowType === 'data' && cols.side">
+                  <span class="ui-badge" :class="'badge-' + (row.data?.position_side || '')"
+                    x-text="row.data?.position_side"></span>
+                </td>
+                <td x-show="row._rowType === 'data' && cols.entry"
+                  x-text="row.data ? '$' + Number(row.data.plan_entry_price).toFixed(2) : ''"></td>
+                <td x-show="row._rowType === 'data' && cols.tp"
+                  x-text="row.data ? '$' + Number(row.data.plan_tp_price).toFixed(2) + ' / $' + Number(row.data.plan_sl_price).toFixed(2) : ''">
+                </td>
+                <td x-show="row._rowType === 'data' && cols.qty" x-text="row.data?.plan_qty"></td>
+                <td x-show="row._rowType === 'data' && cols.value"
+                  x-text="row.data ? '$' + Number(row.data.plan_target_value || (row.data.plan_entry_price * row.data.plan_qty)).toFixed(2) : ''">
+                </td>
+                <td x-show="row._rowType === 'data' && cols.rrr">
+                  <strong :style="{ color: (row.data?.plan_rrr >= 2) ? 'var(--green-500)' : '#f4f4f5' }"
+                    x-text="row.data?.plan_rrr ? Number(row.data.plan_rrr).toFixed(2) : '-'"></strong>
+                </td>
+                <td x-show="row._rowType === 'data' && cols.confidence"><span class="ui-badge badge-neutral"
+                    x-text="row.data?.plan_confidence"></span></td>
+                <td x-show="row._rowType === 'data' && cols.status"><span class="ui-badge"
+                    :class="'badge-' + (row.data?.plan_status || '')" x-text="row.data?.plan_status"></span></td>
+                <td x-show="row._rowType === 'data' && cols.actions" style="text-align: right;">
+                  <div class="action-dropdown" @click.away="if (openMenuId === row.data?.plan_id) openMenuId = null">
+                    <button type="button" class="ui-btn ui-btn-sm !px-1.5"
+                      @click="openMenuId = (openMenuId === row.data?.plan_id ? null : row.data?.plan_id)">
+                      <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <div x-show="openMenuId === row.data?.plan_id" class="action-menu shadow-2xl">
+                      <button type="button" class="action-item" @click="openEdit(row.data)">
+                        <i data-lucide="edit-3" class="w-3 h-3"></i> Edit
+                      </button>
+                      <button type="button" class="action-item"
+                        @click="duplicatePlan(row.data.asset_id, row.data.instrument_type, row.data.plan_entry_price, row.data.plan_tp_price, row.data.plan_sl_price, row.data.plan_qty, row.data.plan_confidence)">
+                        <i data-lucide="copy" class="w-3 h-3"></i> Duplicate
+                      </button>
+                      <button type="button" class="action-item danger" :hx-delete="'/api/plans/' + row.data?.plan_id"
+                        :hx-target="'#plan-row-' + row.data?.plan_id" hx-swap="outerHTML"
+                        :hx-confirm="'Delete plan ' + row.data?.plan_id + '?'">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> Delete
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
+
+            <!-- Empty State -->
+            <template x-if="processedItems.length === 0">
+              <tr>
+                <td colspan="12" class="text-center text-[#a1a1aa] py-8">No trading plans match the selected filters.
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Plan Modal (Unified in root grid) -->
+  <div x-show="showEditModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content" @click.away="closeEdit()">
+      <div class="p-4 bg-[#262626] border-b border-[#38383a] flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-[#f4f4f5] flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-4 h-4 text-[#3b82f6]"></i>
+          Edit Plan: <span class="font-mono text-xs text-[#a1a1aa]" x-text="editItem.plan_id"></span>
+        </h3>
+        <button type="button" class="text-[#a1a1aa] hover:text-[#f4f4f5]" @click="closeEdit()">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form action="/api/plans/update" method="POST" class="p-4 flex flex-col gap-3">
+        <input type="hidden" name="plan_id" :value="editItem.plan_id">
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Instrument Type</label>
+            <select name="instrument_type" class="ui-select" x-model="editItem.instrument_type">
+              <option value="spot">Spot</option>
+              <option value="future">Future</option>
+              <option value="option">Option</option>
+            </select>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Quantity</label>
+            <input type="number" step="any" name="plan_qty" class="ui-input" x-model.number="editItem.plan_qty"
+              required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Entry Price ($)</label>
+            <input type="number" step="any" name="plan_entry_price" class="ui-input"
+              x-model.number="editItem.plan_entry_price" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Take Profit ($)</label>
+            <input type="number" step="any" name="plan_tp_price" class="ui-input"
+              x-model.number="editItem.plan_tp_price" required>
+          </div>
+          <div class="ui-form-group !mb-0">
+            <label class="ui-label">Stop Loss ($)</label>
+            <input type="number" step="any" name="plan_sl_price" class="ui-input"
+              x-model.number="editItem.plan_sl_price" required>
+          </div>
+          <div class="ui-form-group !mb-0" style="grid-column: span 2;">
+            <label class="ui-label">Confidence</label>
+            <select name="plan_confidence" class="ui-select" x-model="editItem.plan_confidence">
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="ui-form-group !mb-0">
+          <label class="ui-label">Hypothesis Memo</label>
+          <input type="text" name="plan_memo" class="ui-input" x-model="editItem.plan_memo">
+        </div>
+
+        <div class="flex justify-end gap-2 mt-2">
+          <button type="button" class="ui-btn ui-btn-sm" @click="closeEdit()">Cancel</button>
+          <button type="submit" class="ui-btn ui-btn-primary ui-btn-sm">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+<header class="app-header">
+  <div class="flex items-center gap-3">
+    <!-- Sidebar Toggle Button (SidebarTrigger) -->
+    <button type="button" @click="$store.app?.toggleSidebar()" class="sidebar-trigger" title="Toggle Sidebar">
+      <i data-lucide="panel-left" style="width: 16px; height: 16px;"></i>
+    </button>
+
+    <div style="width: 1px; height: 14px; background-color: var(--border);"></div>
+
+    <!-- Breadcrumb Navigation -->
+    <div class="breadcrumb-nav text-xs flex items-center gap-1.5 text-[var(--muted-foreground)]">
+      <span>Swing Trading Diary</span>
+      <span style="opacity: 0.4;">/</span>
+      <strong class="text-[var(--foreground)] font-medium">{{ page_title | default('Dashboard') }}</strong>
+    </div>
+  </div>
+
+  <!-- Right Status Bar -->
+  <div class="header-status flex items-center gap-3 text-xs text-[var(--muted-foreground)]">
+    <div>Base: <strong class="text-[var(--foreground)] font-semibold">USD</strong></div>
+  </div>
+</header>

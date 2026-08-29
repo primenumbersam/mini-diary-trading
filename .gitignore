@@ -1,0 +1,30 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+**/.pytest_cache/
+
+# Local Database & SQLite Data
+data/*.db
+data/*.sqlite3
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Environment Variables & Secrets
+.env
+.env.local
+
+# OS & IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Specs (User defined)
+spec.md
+spec-intro.md

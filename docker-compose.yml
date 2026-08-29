@@ -1,0 +1,11 @@
+services:
+  trade-diary:
+    build: .
+    container_name: mini-trade-diary
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1

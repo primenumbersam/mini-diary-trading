@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="{
+  activeTab: 'watchlists',
+  loadedTabs: { watchlists: true, heatmaps: false, charts: false },
+  selectTab(tab) {
+    this.activeTab = tab;
+    this.loadedTabs[tab] = true;
+  }
+}" class="flex flex-col gap-6">
+
+  <!-- Header & Tab Navigation -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
+    <div>
+      <h2 class="text-xl font-semibold tracking-tight text-[var(--foreground)]">Market Widgets & Live Data</h2>
+      <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+        실시간 시세 감시, 섹터별 히트맵 및 고급 실시간 기술적 분석 차트
+      </p>
+    </div>
+
+    <!-- Tab Selector -->
+    <div
+      class="flex items-center gap-1.5 p-1 bg-[var(--muted)] border border-[var(--border)] rounded-lg self-start md:self-auto">
+      <button type="button" @click="selectTab('watchlists')"
+        :class="activeTab === 'watchlists' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm font-semibold' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'"
+        class="flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs transition-all cursor-pointer">
+        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+        <span>Watchlists</span>
+      </button>
+
+      <button type="button" @click="selectTab('heatmaps')"
+        :class="activeTab === 'heatmaps' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm font-semibold' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'"
+        class="flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs transition-all cursor-pointer">
+        <i data-lucide="grid" class="w-3.5 h-3.5"></i>
+        <span>Heatmaps</span>
+      </button>
+
+      <button type="button" @click="selectTab('charts')"
+        :class="activeTab === 'charts' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm font-semibold' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'"
+        class="flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs transition-all cursor-pointer">
+        <i data-lucide="candlestick-chart" class="w-3.5 h-3.5"></i>
+        <span>Real-time Charts</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- TAB 1: WATCHLISTS -->
+  <div x-show="activeTab === 'watchlists'" class="flex flex-col gap-6">
+
+    <!-- Top Row: World Market & Ticker Tape -->
+    <div class="w-full">
+      <div class="ui-card flex flex-col overflow-hidden bg-[#0F0F0F] border border-[var(--border)]">
+        <div class="ui-card-header pb-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="ui-badge badge-active">Global Indices</span>
+            <span class="ui-card-title text-sm font-semibold text-[var(--foreground)]">World Markets & Tickers</span>
+          </div>
+        </div>
+        <div class="ui-card-content p-4 flex flex-col gap-4">
+          <template x-if="loadedTabs.watchlists">
+            <tv-tickers
+              symbols="FX_IDC:USDKRW,FOREXCOM:SPXUSD,FOREXCOM:NSXUSD,BITSTAMP:BTCUSD,BITSTAMP:ETHUSD, NYSE:CPNG"
+              direction="horizontal" hide-chart theme="dark" transparent show-hover></tv-tickers>
+          </template>
+
+          <template x-if="loadedTabs.watchlists">
+            <tv-world-market-summary view="list" theme="dark" transparent
+              countries="US,JP,KR,CN,TW"></tv-world-market-summary>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Row: Investing.com Economic Calendar & Top Stories News (2-col grid) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <!-- Left: Investing.com Economic Calendar -->
+      <div class="ui-card flex flex-col overflow-hidden">
+        <div class="ui-card-header pb-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="ui-badge badge-active">Economic Calendar</span>
+            <span class="ui-card-title text-sm font-semibold text-[var(--foreground)]">경제 캘린더</span>
+          </div>
+        </div>
+        <div class="ui-card-content p-4 flex flex-col items-center">
+          <div
+            class="w-full overflow-x-auto rounded-md border border-[var(--border)] bg-[var(--background)] flex justify-center">
+            <template x-if="loadedTabs.watchlists">
+              <iframe
+                src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&category=_employment,_economicActivity,_inflation,_credit,_centralBanks,_confidenceIndex,_balance,_Bonds&importance=3&features=datepicker,timezone,filters&countries=5,11&calType=week&timeZone=88&lang=18"
+                class="w-full min-w-[320px] max-w-[650px] h-[540px]" frameborder="0" allowtransparency="true"
+                marginwidth="0" marginheight="0" referrerpolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms">
+              </iframe>
+            </template>
+          </div>
+          <div class="poweredBy mt-2 self-end text-xs text-[var(--muted-foreground)]">
+            <span>출처 포털 <a href="https://kr.Investing.com/" rel="nofollow" target="_blank"
+                class="text-blue-500 hover:underline font-semibold">Investing.com</a></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: TradingView Top Stories Timeline -->
+      <div class="ui-card flex flex-col overflow-hidden">
+        <div class="ui-card-header pb-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="ui-badge badge-active">Live Feed</span>
+            <span class="ui-card-title text-sm font-semibold text-[var(--foreground)]">TradingView Top Stories</span>
+          </div>
+        </div>
+        <div class="ui-card-content p-0" style="height: 600px; width: 100%;">
+          <template x-if="loadedTabs.watchlists">
+            <div class="tradingview-widget-container" style="height: 100%; width: 100%;">
+              <div class="tradingview-widget-container__widget" style="height: calc(100% - 32px); width: 100%;"></div>
+              <div class="tradingview-widget-copyright px-3 py-1 text-xs text-[var(--muted-foreground)]"><a
+                  href="https://www.tradingview.com/news/top-providers/tradingview/" rel="noopener nofollow"
+                  target="_blank" class="text-blue-500 hover:underline">Top stories</a><span class="trademark"> by
+                  TradingView</span></div>
+              <script type="text/javascript"
+                src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js" async>
+                  {
+                    "displayMode": "regular",
+                      "feedMode": "all_symbols",
+                        "colorTheme": "dark",
+                          "isTransparent": true,
+                            "locale": "en",
+                              "width": "100%",
+                                "height": "100%"
+                  }
+                </script>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TAB 2: HEATMAPS (2-col grid) -->
+  <div x-show="activeTab === 'heatmaps'" style="display: none;" class="flex flex-col gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+
+      <!-- 1st col: Stock Heatmap (S&P 500) -->
+      <div class="ui-card flex flex-col overflow-hidden">
+        <div class="ui-card-header pb-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="ui-badge badge-active">S&P 500</span>
+            <span class="ui-card-title text-sm font-semibold text-[var(--foreground)]">Stock Heatmap</span>
+          </div>
+        </div>
+        <div class="ui-card-content p-0" style="height: 560px; width: 100%;">
+          <template x-if="loadedTabs.heatmaps">
+            <div class="tradingview-widget-container" style="height: 100%; width: 100%;">
+              <div class="tradingview-widget-container__widget" style="height: calc(100% - 32px); width: 100%;"></div>
+              <div class="tradingview-widget-copyright px-3 py-1 text-xs text-[var(--muted-foreground)]"><a
+                  href="https://www.tradingview.com/heatmap/stock/" rel="noopener nofollow" target="_blank"
+                  class="text-blue-500 hover:underline">Stock Heatmap</a><span class="trademark"> by TradingView</span>
+              </div>
+              <script type="text/javascript"
+                src="https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js" async>
+                  {
+                    "dataSource": "SPX500",
+                      "blockSize": "market_cap_basic",
+                        "blockColor": "change",
+                          "grouping": "sector",
+                            "locale": "en",
+                              "symbolUrl": "",
+                                "colorTheme": "dark",
+                                  "exchanges": [],
+                                    "hasTopBar": false,
+                                      "isDataSetEnabled": false,
+                                        "isZoomEnabled": true,
+                                          "hasSymbolTooltip": true,
+                                            "isMonoSize": false,
+                                              "width": "100%",
+                                                "height": "100%"
+                  }
+                </script>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 2nd col: ETF Heatmap (All US ETFs) -->
+      <div class="ui-card flex flex-col overflow-hidden">
+        <div class="ui-card-header pb-3 border-b border-[var(--border)] flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="ui-badge badge-neutral">US ETFs</span>
+            <span class="ui-card-title text-sm font-semibold text-[var(--foreground)]">ETF Heatmap</span>
+          </div>
+        </div>
+        <div class="ui-card-content p-0" style="height: 560px; width: 100%;">
+          <template x-if="loadedTabs.heatmaps">
+            <div class="tradingview-widget-container" style="height: 100%; width: 100%;">
+              <div class="tradingview-widget-container__widget" style="height: calc(100% - 32px); width: 100%;"></div>
+              <div class="tradingview-widget-copyright px-3 py-1 text-xs text-[var(--muted-foreground)]"><a
+                  href="https://www.tradingview.com/heatmap/etf/" rel="noopener nofollow" target="_blank"
+                  class="text-blue-500 hover:underline">ETF Heatmap</a><span class="trademark"> by TradingView</span>
+              </div>
+              <script type="text/javascript"
+                src="https://s3.tradingview.com/external-embedding/embed-widget-etf-heatmap.js" async>
+                  {
+                    "dataSource": "AllUSEtf",
+                      "blockSize": "volume",
+                        "blockColor": "change",
+                          "grouping": "asset_class",
+                            "locale": "en",
+                              "symbolUrl": "",
+                                "colorTheme": "dark",
+                                  "hasTopBar": false,
+                                    "isDataSetEnabled": false,
+                                      "isZoomEnabled": true,
+                                        "hasSymbolTooltip": true,
+                                          "isMonoSize": false,
+                                            "width": "100%",
+                                              "height": "100%"
+                  }
+                </script>
+            </div>
+          </template>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB 3: REAL-TIME CHARTS -->
+  <div x-show="activeTab === 'charts'" style="display: none;" class="flex flex-col gap-6">
+    <div class="ui-card flex flex-col overflow-hidden">
+      <div class="ui-card-header pb-3 border-b border-[var(--border)] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="ui-badge badge-active">Advanced Chart</span>
+          <span class="ui-card-title text-sm font-semibold text-[var(--foreground)]">Real-Time Technical Chart</span>
+        </div>
+      </div>
+      <div class="ui-card-content p-0 relative" style="height: 680px; width: 100%;">
+        <template x-if="loadedTabs.charts">
+          <!-- TradingView Widget BEGIN -->
+          <div class="tradingview-widget-container" style="height:100%;width:100%">
+            <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+            <div class="tradingview-widget-copyright px-3 py-1 text-xs text-[var(--muted-foreground)]"><a
+                href="https://www.tradingview.com/symbols/NASDAQ-PLTR/" rel="noopener nofollow" target="_blank"
+                class="text-blue-500 hover:underline">PLTR stock chart</a><span class="trademark"> by TradingView</span>
+            </div>
+            <script type="text/javascript"
+              src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+                {
+                  "allow_symbol_change": true,
+                    "calendar": false,
+                      "details": false,
+                        "hide_side_toolbar": true,
+                          "hide_top_toolbar": false,
+                            "hide_legend": false,
+                              "hide_volume": false,
+                                "hotlist": false,
+                                  "interval": "D",
+                                    "locale": "en",
+                                      "save_image": true,
+                                        "style": "1",
+                                          "symbol": "NASDAQ:PLTR",
+                                            "theme": "dark",
+                                              "timezone": "Asia/Seoul",
+                                                "backgroundColor": "#0F0F0F",
+                                                  "gridColor": "rgba(242, 242, 242, 0.2)",
+                                                    "watchlist": [],
+                                                      "withdateranges": false,
+                                                        "compareSymbols": [],
+                                                          "support_host": "https://www.tradingview.com",
+                                                            "studies": [],
+                                                              "autosize": true
+                }
+              </script>
+          </div>
+          <!-- TradingView Widget END -->
+        </template>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- TradingView Custom Elements Web Components (Load once globally for Tab 1) -->
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-world-market-summary.js"></script>
+<script type="module" src="https://widgets.tradingview-widget.com/w/en/tv-tickers.js"></script>
+{% endblock %}
