@@ -3,8 +3,10 @@
 A lightweight, self-hosted swing trading journal and portfolio tracking system.  
 Built with a zero-build, no-Node architecture using FastAPI, SQLite, HTMX, and Alpine.js.
 
+![Screenshot](screen.jpg)
+
 ---
-## Future Roadmap & Extension Plan (확장 계획)
+## Future Roadmap (확장 계획)
 1. **Table Import and Export Function**: CSV/Excel/JSON 형태의 자산, 계획, 체결 원장 대량 업로드 및 백업 다운로드 기능
 2. **Market Data Refinement**: 외부 시장 데이터 파이프라인(`data_market.py`) 고도화, 벤치마크 수익률 분포(Return Distribution in time window) 및 변동성/MDD 정밀 산출
 3. **Multi-tenancy**: 선제 배치된 `user_id` 아키텍처 기반 다중 사용자 인증(Auth), 세션 격리 및 사용자별 포트폴리오 관리
